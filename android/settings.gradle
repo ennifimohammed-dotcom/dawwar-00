@@ -51,5 +51,4 @@ plugins {
     id "org.jetbrains.kotlin.android" version "1.9.0" apply false
 }
 
-include ":app"
-ملف 2 — android/app/build.gradle (استبدل المحتوى كاملاً)
+include ":app" 
