@@ -1,6 +1,3 @@
-Exécuté 2 commandes
-bash
-
 cat << 'EOF'
 pluginManagement {
     def flutterSdkPath = {
@@ -55,3 +52,4 @@ plugins {
 }
 
 include ":app"
+ملف 2 — android/app/build.gradle (استبدل المحتوى كاملاً)
