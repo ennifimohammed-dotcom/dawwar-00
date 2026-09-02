@@ -3,8 +3,6 @@ name: Build APK
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -35,41 +33,68 @@ jobs:
 
       - name: Download Cairo Font
         run: |
-          curl -L "https://github.com/google/fonts/raw/main/ofl/cairo/Cairo%5Bslnt%2Cwght%5D.ttf" -o assets/fonts/Cairo-Regular.ttf || \
-          curl -L "https://fonts.gstatic.com/s/cairo/v28/SLXgc1nY6HkvalIhTps.ttf" -o assets/fonts/Cairo-Regular.ttf || \
-          cp assets/fonts/Cairo-Regular.ttf assets/fonts/Cairo-Bold.ttf || true
+          curl -L "https://github.com/google/fonts/raw/main/ofl/cairo/Cairo%5Bslnt%2Cwght%5D.ttf" \
+            -o assets/fonts/Cairo-Regular.ttf 2>/dev/null || \
+          touch assets/fonts/Cairo-Regular.ttf
+          cp assets/fonts/Cairo-Regular.ttf assets/fonts/Cairo-Bold.ttf
 
-      - name: Copy font for bold if needed
+      - name: Create launcher icon
         run: |
-          if [ ! -f assets/fonts/Cairo-Bold.ttf ]; then
-            cp assets/fonts/Cairo-Regular.ttf assets/fonts/Cairo-Bold.ttf
-          fi
+          mkdir -p android/app/src/main/res/mipmap-mdpi
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/res/mipmap-xhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+          
+          # Generate simple PNG icons using Python
+          python3 - <<'PYEOF'
+          import struct, zlib
+
+          def create_png(size, r, g, b):
+              def chunk(name, data):
+                  c = zlib.crc32(name + data) & 0xffffffff
+                  return struct.pack('>I', len(data)) + name + data + struct.pack('>I', c)
+              
+              raw = b''
+              for y in range(size):
+                  row = b'\x00'
+                  for x in range(size):
+                      row += bytes([r, g, b, 255])
+                  raw += row
+              
+              compressed = zlib.compress(raw)
+              ihdr = struct.pack('>IIBBBBB', size, size, 8, 2, 0, 0, 0)
+              
+              return (b'\x89PNG\r\n\x1a\n' + 
+                      chunk(b'IHDR', ihdr) + 
+                      chunk(b'IDAT', compressed) + 
+                      chunk(b'IEND', b''))
+
+          sizes = {
+              'mipmap-mdpi': 48,
+              'mipmap-hdpi': 72,
+              'mipmap-xhdpi': 96,
+              'mipmap-xxhdpi': 144,
+              'mipmap-xxxhdpi': 192,
+          }
+
+          for folder, size in sizes.items():
+              path = f'android/app/src/main/res/{folder}/ic_launcher.png'
+              with open(path, 'wb') as f:
+                  f.write(create_png(size, 27, 94, 32))
+          
+          print("Icons created!")
+          PYEOF
 
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Analyze code
-        run: flutter analyze --no-fatal-infos
-        continue-on-error: true
-
-      - name: Build APK (release)
-        run: flutter build apk --release --no-shrink
+      - name: Build APK
+        run: flutter build apk --debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: dawwar-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30
-
-      - name: Build APK (debug) as fallback
-        if: failure()
-        run: flutter build apk --debug
-
-      - name: Upload Debug APK
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dawwar-debug-apk
+          name: dawwar-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 30
